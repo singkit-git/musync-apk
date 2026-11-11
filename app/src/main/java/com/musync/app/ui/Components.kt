@@ -1,5 +1,12 @@
 package com.musync.app.ui
 
+import android.content.ContentValues
+import android.content.Context
+import android.graphics.BitmapFactory
+import android.os.Build
+import android.provider.MediaStore
+import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -7,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -52,14 +60,18 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.musync.app.PlayerViewModel
+import com.musync.app.R
 import com.musync.app.Song
 import com.musync.app.UpdateInfo
 
@@ -485,3 +497,149 @@ fun UpdateDialog(
         }
     )
 }
+
+@Composable
+fun SupportDevDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var selectedTab by remember { mutableStateOf(0) } // 0 = GCash, 1 = Maya
+    val gcashBlue = Color(0xFF007DFE)
+    val mayaGreen = Color(0xFF00D066)
+    val label = if (selectedTab == 0) "GCash" else "Maya"
+    val qrRes = if (selectedTab == 0) R.drawable.qr_gcash else R.drawable.qr_maya
+    val activeColor = if (selectedTab == 0) gcashBlue else mayaGreen
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Surface2,
+        title = {
+            Column {
+                Text("Buy the Dev a Coffee ☕", color = TextPrimary, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Enjoying Musync? Treat the developer to a coffee via GCash or Maya!",
+                    color = TextSecondary,
+                    fontSize = 13.sp
+                )
+            }
+        },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                // GCash / Maya Tab Switcher
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(50))
+                        .background(Surface3)
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(50))
+                            .background(if (selectedTab == 0) gcashBlue else Color.Transparent)
+                            .clickable { selectedTab = 0 }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "GCash",
+                            color = if (selectedTab == 0) Color.White else TextSecondary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(50))
+                            .background(if (selectedTab == 1) mayaGreen else Color.Transparent)
+                            .clickable { selectedTab = 1 }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "Maya",
+                            color = if (selectedTab == 1) Color.Black else TextSecondary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                // QR Code Card
+                Box(
+                    Modifier
+                        .fillMaxWidth(0.92f)
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color.White)
+                        .padding(12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        painter = painterResource(id = qrRes),
+                        contentDescription = "$label QR Code",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Scan with another phone, or tap 'Save QR' below and upload it in your $label app.",
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val ok = saveQrToGallery(context, qrRes, label)
+                    Toast.makeText(
+                        context,
+                        if (ok) "Saved $label QR to Gallery! Open $label → QR → Upload QR"
+                        else "Could not save QR image",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            ) {
+                Text("Save $label QR", color = activeColor, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close", color = TextSecondary)
+            }
+        }
+    )
+}
+
+private fun saveQrToGallery(context: Context, drawableRes: Int, label: String): Boolean =
+    runCatching {
+        val bitmap = BitmapFactory.decodeResource(context.resources, drawableRes) ?: return false
+        val filename = "Musync_${label}_QR_${System.currentTimeMillis()}.jpg"
+        val resolver = context.contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, filename)
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Musync")
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }
+        }
+        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return false
+        resolver.openOutputStream(uri)?.use { out ->
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, out)
+        } ?: return false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            values.clear()
+            values.put(MediaStore.Images.Media.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+        }
+        true
+    }.getOrDefault(false)

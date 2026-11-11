@@ -28,7 +28,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,23 +67,44 @@ fun HomeScreen(vm: PlayerViewModel, onGoExplore: () -> Unit) {
     val recents = remember(recentIds, byId) { recentIds.mapNotNull { byId[it] } }
     val likedSongs = remember(likedIds, byId) { likedIds.mapNotNull { byId[it] } }
     val albums = remember(songs) { songs.toAlbums().shuffled() }
+    var showSupport by remember { mutableStateOf(false) }
+
+    if (showSupport) SupportDevDialog { showSupport = false }
 
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
         item {
-            Column(
+            Row(
                 Modifier
                     .statusBarsPadding()
-                    .padding(start = 20.dp, end = 20.dp, top = 20.dp)
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 20.dp, top = 20.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    "Musync",
-                    style = MaterialTheme.typography.headlineMedium.copy(brush = AccentBrush)
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(greeting(), color = TextSecondary, fontSize = 15.sp)
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Musync",
+                        style = MaterialTheme.typography.headlineMedium.copy(brush = AccentBrush)
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(greeting(), color = TextSecondary, fontSize = 15.sp)
+                }
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(Surface2)
+                        .clickable { showSupport = true }
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        "☕ Buy a coffee",
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
 

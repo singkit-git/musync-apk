@@ -18,6 +18,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Tune
@@ -53,6 +54,7 @@ fun SettingsScreen(vm: PlayerViewModel) {
 
     var key by remember(savedKey) { mutableStateOf(savedKey) }
     var showSleep by remember { mutableStateOf(false) }
+    var showSupport by remember { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -162,8 +164,34 @@ fun SettingsScreen(vm: PlayerViewModel) {
             }
         }
 
+        Group("Support") {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { showSupport = true }
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Rounded.Favorite, null, tint = Accent, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Buy the Dev a Coffee ☕",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "Support Musync via GCash or Maya QR",
+                        color = TextSecondary,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
+
         Group("About") {
-            Text("Musync 1.1.0", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+            Text("Musync 1.2.0", color = TextPrimary, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(2.dp))
             Text(
                 "Your music, in sync. Powered by on-device YouTube extraction.",
@@ -196,6 +224,7 @@ fun SettingsScreen(vm: PlayerViewModel) {
     }
 
     if (showSleep) SleepTimerDialog(sleep, { vm.setSleepTimer(it) }) { showSleep = false }
+    if (showSupport) SupportDevDialog { showSupport = false }
 }
 
 @Composable
