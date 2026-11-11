@@ -147,7 +147,7 @@ fun SettingsScreen(vm: PlayerViewModel) {
         }
 
         Group("About") {
-            Text("Musync 1.3.1", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+            Text("Musync 1.4.0", color = TextPrimary, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(2.dp))
             Text(
                 "Your music, in sync. Powered by on-device YouTube extraction.",

@@ -1,10 +1,17 @@
 package com.musync.app.ui
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -18,7 +25,10 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
@@ -28,6 +38,7 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Repeat
@@ -42,23 +53,31 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
+import coil.compose.AsyncImage
 import com.musync.app.DlState
 import com.musync.app.PlayerViewModel
+import com.musync.app.SongLyrics
 import com.musync.app.asClock
 
 @Composable
@@ -139,8 +158,11 @@ fun NowPlayingScreen(vm: PlayerViewModel, onClose: () -> Unit) {
     val queue by vm.queue.collectAsStateWithLifecycle()
     val sleep by vm.sleepMinutes.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
+    val lyrics by vm.currentLyrics.collectAsStateWithLifecycle()
+    val lyricsLoading by vm.lyricsLoading.collectAsStateWithLifecycle()
 
     var showQueue by remember { mutableStateOf(false) }
+    var showLyrics by remember { mutableStateOf(false) }
     var showSleep by remember { mutableStateOf(false) }
     var showPlaylist by remember { mutableStateOf(false) }
     var dragging by remember { mutableStateOf<Float?>(null) }
@@ -151,6 +173,11 @@ fun NowPlayingScreen(vm: PlayerViewModel, onClose: () -> Unit) {
     Box(
         Modifier
             .fillMaxSize()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {}
+            )
             .background(Bg)
             .background(GlowBrush)
     ) {
@@ -172,7 +199,11 @@ fun NowPlayingScreen(vm: PlayerViewModel, onClose: () -> Unit) {
                     Icon(Icons.Rounded.KeyboardArrowDown, "Close", tint = TextPrimary, modifier = Modifier.size(32.dp))
                 }
                 Text(
-                    if (showQueue) "UP NEXT" else "NOW PLAYING",
+                    when {
+                        showLyrics -> "LYRICS"
+                        showQueue -> "UP NEXT"
+                        else -> "NOW PLAYING"
+                    },
                     color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold,
                     letterSpacing = 2.sp, modifier = Modifier.weight(1f),
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -180,7 +211,7 @@ fun NowPlayingScreen(vm: PlayerViewModel, onClose: () -> Unit) {
                 Spacer(Modifier.width(48.dp))
             }
 
-            // Artwork or queue
+            // Artwork, lyrics, or queue
             Box(
                 Modifier
                     .weight(1f)
@@ -188,59 +219,89 @@ fun NowPlayingScreen(vm: PlayerViewModel, onClose: () -> Unit) {
                     .padding(vertical = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
-                if (showQueue) {
-                    LazyColumn(Modifier.fillMaxSize()) {
-                        itemsIndexed(queue) { i, q ->
-                            val isCur = q.id == s.id
-                            Row(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable { vm.skipTo(i) }
-                                    .padding(vertical = 8.dp, horizontal = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Artwork(q.artUri, Modifier.size(44.dp), RoundedCornerShape(8.dp), q.album)
-                                Spacer(Modifier.width(12.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        q.title, color = if (isCur) Accent else TextPrimary,
-                                        fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
-                                        maxLines = 1, overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        q.artist, color = TextSecondary, fontSize = 12.sp,
-                                        maxLines = 1, overflow = TextOverflow.Ellipsis
-                                    )
+                when {
+                    showLyrics -> {
+                        LyricsCard(
+                            lyrics = lyrics,
+                            loading = lyricsLoading,
+                            currentPos = pos,
+                            artUri = s.artUri,
+                            albumSeed = s.album,
+                            onSeek = { vm.seekTo(it) }
+                        )
+                    }
+                    showQueue -> {
+                        LazyColumn(Modifier.fillMaxSize()) {
+                            itemsIndexed(queue) { i, q ->
+                                val isCur = q.id == s.id
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable { vm.skipTo(i) }
+                                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Artwork(q.artUri, Modifier.size(44.dp), RoundedCornerShape(8.dp), q.album)
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            q.title, color = if (isCur) Accent else TextPrimary,
+                                            fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            q.artist, color = TextSecondary, fontSize = 12.sp,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Text(q.durationMs.asClock(), color = TextSecondary, fontSize = 12.sp)
                                 }
-                                Text(q.durationMs.asClock(), color = TextSecondary, fontSize = 12.sp)
                             }
                         }
                     }
-                } else {
-                    Artwork(
-                        s.artUri,
-                        Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(1f)
-                            .shadow(32.dp, RoundedCornerShape(28.dp), spotColor = Violet),
-                        RoundedCornerShape(28.dp),
-                        s.album
-                    )
+                    else -> {
+                        Artwork(
+                            s.artUri,
+                            Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(1f)
+                                .shadow(32.dp, RoundedCornerShape(28.dp), spotColor = Violet)
+                                .clickable { showLyrics = true },
+                            RoundedCornerShape(28.dp),
+                            s.album
+                        )
+                    }
                 }
             }
 
             // Title + like
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {}
+                        )
+                ) {
                     Text(
-                        s.title, color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis
+                        s.title,
+                        color = TextPrimary,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.basicMarquee()
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        s.artist, color = TextSecondary, fontSize = 15.sp,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis
+                        s.artist,
+                        color = TextSecondary,
+                        fontSize = 15.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 val isLiked = s.id in liked
@@ -353,10 +414,22 @@ fun NowPlayingScreen(vm: PlayerViewModel, onClose: () -> Unit) {
                             }
                         }
                     }
+                    IconButton(onClick = {
+                        showLyrics = !showLyrics
+                        if (showLyrics) showQueue = false
+                    }) {
+                        Icon(
+                            Icons.Rounded.Lyrics, "Lyrics",
+                            tint = if (showLyrics) Accent else TextSecondary
+                        )
+                    }
                     IconButton(onClick = { showPlaylist = true }) {
                         Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to playlist", tint = TextSecondary)
                     }
-                    IconButton(onClick = { showQueue = !showQueue }) {
+                    IconButton(onClick = {
+                        showQueue = !showQueue
+                        if (showQueue) showLyrics = false
+                    }) {
                         Icon(
                             Icons.AutoMirrored.Rounded.QueueMusic, "Queue",
                             tint = if (showQueue) Accent else TextSecondary
@@ -369,4 +442,220 @@ fun NowPlayingScreen(vm: PlayerViewModel, onClose: () -> Unit) {
 
     if (showSleep) SleepTimerDialog(sleep, { vm.setSleepTimer(it) }) { showSleep = false }
     if (showPlaylist) AddToPlaylistDialog(vm, s) { showPlaylist = false }
+}
+
+@Composable
+fun LyricsCard(
+    lyrics: SongLyrics?,
+    loading: Boolean,
+    currentPos: Long,
+    artUri: String?,
+    albumSeed: String,
+    onSeek: (Long) -> Unit
+) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(28.dp))
+            .background(Surface2)
+    ) {
+        // 1. Dynamic Album Art Glow Layer (Apple Music style)
+        if (artUri != null) {
+            AsyncImage(
+                model = artUri,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(radius = 55.dp)
+            )
+        } else {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(placeholderBrush(albumSeed))
+                    .blur(radius = 55.dp)
+            )
+        }
+
+        // 2. Dark contrast tint so lyrics are always super readable & sharp
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.Black.copy(alpha = 0.62f),
+                            Color.Black.copy(alpha = 0.50f),
+                            Color.Black.copy(alpha = 0.70f)
+                        )
+                    )
+                )
+        )
+
+        // 3. Lyrics Content
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            when {
+                loading && lyrics == null -> {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(
+                            color = Accent,
+                            strokeWidth = 2.5.dp,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        Text("Finding lyrics…", color = TextSecondary, fontSize = 14.sp)
+                    }
+                }
+                lyrics == null || (lyrics.lines.isEmpty() && lyrics.plainLyrics.isNullOrBlank() && !lyrics.isInstrumental) -> {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            Icons.Rounded.Lyrics,
+                            contentDescription = null,
+                            tint = TextSecondary.copy(alpha = 0.45f),
+                            modifier = Modifier.size(44.dp)
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "No lyrics available",
+                            color = TextPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Lyrics could not be found for this track",
+                            color = TextSecondary,
+                            fontSize = 13.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+                lyrics.isInstrumental -> {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("♪", color = Accent, fontSize = 40.sp)
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Instrumental Track",
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text("No vocals in this song", color = TextSecondary, fontSize = 13.sp)
+                    }
+                }
+                lyrics.isSynced -> {
+                    val listState = rememberLazyListState()
+                    val activeIndex = remember(lyrics, currentPos) {
+                        lyrics.lines.indexOfLast { it.timeMs <= currentPos + 180L }.coerceAtLeast(0)
+                    }
+
+                    // Auto-center the active line smoothly
+                    LaunchedEffect(activeIndex) {
+                        if (activeIndex in lyrics.lines.indices) {
+                            listState.animateScrollToItem(
+                                index = activeIndex,
+                                scrollOffset = -220
+                            )
+                        }
+                    }
+
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(top = 80.dp, bottom = 120.dp),
+                        verticalArrangement = Arrangement.spacedBy(18.dp)
+                    ) {
+                        itemsIndexed(lyrics.lines) { index, line ->
+                            val isCurrent = index == activeIndex
+                            val alpha by animateFloatAsState(
+                                targetValue = if (isCurrent) 1.0f else 0.32f,
+                                animationSpec = tween(280),
+                                label = "alpha"
+                            )
+                            val scale by animateFloatAsState(
+                                targetValue = if (isCurrent) 1.05f else 0.96f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioLowBouncy,
+                                    stiffness = Spring.StiffnessMediumLow
+                                ),
+                                label = "scale"
+                            )
+
+                            Text(
+                                text = line.text,
+                                color = if (isCurrent) Color.White else TextSecondary.copy(alpha = 0.85f),
+                                fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                fontSize = if (isCurrent) 23.sp else 16.sp,
+                                lineHeight = if (isCurrent) 31.sp else 23.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .graphicsLayer {
+                                        this.scaleX = scale
+                                        this.scaleY = scale
+                                        this.alpha = alpha
+                                        this.transformOrigin = TransformOrigin(0f, 0.5f)
+                                    }
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onSeek(line.timeMs) }
+                                    .padding(vertical = 4.dp, horizontal = 4.dp)
+                            )
+                        }
+                    }
+                }
+                else -> {
+                    val scrollState = rememberScrollState()
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(scrollState)
+                            .padding(vertical = 24.dp, horizontal = 8.dp)
+                    ) {
+                        Text(
+                            text = lyrics.plainLyrics ?: "",
+                            color = TextPrimary,
+                            fontSize = 15.sp,
+                            lineHeight = 25.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        // 4. Cinematic Top & Bottom Edge Fade (Vignette)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .align(Alignment.TopCenter)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.Black.copy(alpha = 0.70f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .align(Alignment.BottomCenter)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.75f)
+                        )
+                    )
+                )
+        )
+    }
 }

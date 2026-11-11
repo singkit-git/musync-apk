@@ -47,6 +47,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     val queue = MutableStateFlow<List<Song>>(emptyList())
     val sleepMinutes = MutableStateFlow(0)
 
+    // Lyrics
+    val currentLyrics = MutableStateFlow<SongLyrics?>(null)
+    val lyricsLoading = MutableStateFlow(false)
+
     // Persisted state
     val playlists: StateFlow<List<Playlist>> = store.playlists
     val liked: StateFlow<List<String>> = store.liked
@@ -55,6 +59,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private var controller: MediaController? = null
     private val songMap = HashMap<String, Song>()
     private var sleepJob: Job? = null
+    private var lyricsJob: Job? = null
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) = sync(player)
@@ -100,11 +105,24 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             if (song != null) {
                 if (song.remote) store.saveRemoteSong(song)
                 store.addRecent(song.id)
+                fetchLyrics(song)
+            } else {
+                currentLyrics.value = null
+                lyricsLoading.value = false
             }
         }
         queue.value = (0 until p.mediaItemCount).mapNotNull {
             val id = p.getMediaItemAt(it).mediaId
             songMap[id] ?: store.remoteSongs.value[id]
+        }
+    }
+
+    fun fetchLyrics(song: Song) {
+        lyricsJob?.cancel()
+        lyricsJob = viewModelScope.launch {
+            lyricsLoading.value = true
+            currentLyrics.value = LyricsApi.getLyrics(getApplication(), song)
+            lyricsLoading.value = false
         }
     }
 
