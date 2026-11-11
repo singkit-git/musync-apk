@@ -126,7 +126,7 @@ fun SplashScreen(
                 PulsingDots()
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    text = "v1.3.0",
+                    text = "v1.3.1",
                     color = TextSecondary.copy(alpha = 0.45f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Normal

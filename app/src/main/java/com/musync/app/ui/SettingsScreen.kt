@@ -14,16 +14,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -46,13 +43,11 @@ import com.musync.app.PlayerViewModel
 @Composable
 fun SettingsScreen(vm: PlayerViewModel) {
     val store = vm.store
-    val savedKey by store.serverUrl.collectAsStateWithLifecycle()
     val hideShort by store.hideShort.collectAsStateWithLifecycle()
     val sleep by vm.sleepMinutes.collectAsStateWithLifecycle()
     val songs by vm.songs.collectAsStateWithLifecycle()
     val checkingUpdate by vm.checkingUpdate.collectAsStateWithLifecycle()
 
-    var key by remember(savedKey) { mutableStateOf(savedKey) }
     var showSleep by remember { mutableStateOf(false) }
     var showSupport by remember { mutableStateOf(false) }
 
@@ -62,45 +57,6 @@ fun SettingsScreen(vm: PlayerViewModel) {
             .verticalScroll(rememberScrollState())
     ) {
         ScreenHeader("Settings")
-
-        Group("Search & Downloads") {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Key, null, tint = Accent, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(10.dp))
-                Text("Custom Backend Server (Optional)", color = TextPrimary, fontWeight = FontWeight.SemiBold)
-            }
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Leave blank to search and download directly via YouTube. Or enter your custom yt-dlp backend (e.g. http://192.168.1.10:8000).",
-                color = TextSecondary, fontSize = 13.sp
-            )
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                value = key,
-                onValueChange = { key = it },
-                singleLine = true,
-                placeholder = { Text("http://host:8000", color = TextSecondary) },
-                keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(10.dp))
-            Row(
-                Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(if (key.trim() != savedKey) Color.Transparent else Surface3)
-                    .then(
-                        if (key.trim() != savedKey) Modifier.background(AccentBrush) else Modifier
-                    )
-                    .clickable(enabled = key.trim() != savedKey) { store.setServerUrl(key.trim()) }
-                    .padding(horizontal = 22.dp, vertical = 10.dp)
-            ) {
-                Text(
-                    if (key.trim() != savedKey) "Save" else "Saved",
-                    color = if (key.trim() != savedKey) Color.White else TextSecondary,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
 
         Group("Library") {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -191,7 +147,7 @@ fun SettingsScreen(vm: PlayerViewModel) {
         }
 
         Group("About") {
-            Text("Musync 1.3.0", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+            Text("Musync 1.3.1", color = TextPrimary, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(2.dp))
             Text(
                 "Your music, in sync. Powered by on-device YouTube extraction.",
