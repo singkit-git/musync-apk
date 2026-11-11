@@ -63,6 +63,7 @@ import com.musync.app.ui.MiniPlayer
 import com.musync.app.ui.MusyncTheme
 import com.musync.app.ui.NowPlayingScreen
 import com.musync.app.ui.SettingsScreen
+import com.musync.app.ui.SplashScreen
 import com.musync.app.ui.Surface1
 import com.musync.app.ui.Surface2
 import com.musync.app.ui.TextPrimary
@@ -97,10 +98,16 @@ private fun MusyncRoot() {
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showPlayer by rememberSaveable { mutableStateOf(false) }
+    var showSplash by rememberSaveable { mutableStateOf(true) }
     val current by vm.current.collectAsStateWithLifecycle()
     val update by vm.availableUpdate.collectAsStateWithLifecycle()
     val updateProgress by vm.updatingProgress.collectAsStateWithLifecycle()
     val snackbars = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(850)
+        showSplash = false
+    }
 
     LaunchedEffect(Unit) {
         vm.messages.collect { msg ->
@@ -202,5 +209,7 @@ private fun MusyncRoot() {
                 onDismiss = { vm.dismissUpdate() }
             )
         }
+
+        SplashScreen(visible = showSplash)
     }
 }
