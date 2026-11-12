@@ -111,7 +111,7 @@ object LyricsApi {
     private fun executeRaw(url: String): String? = runCatching {
         val req = Request.Builder()
             .url(url)
-            .header("User-Agent", "Musync-Android/1.3.1 (https://github.com/singkit-git/musync-apk)")
+            .header("User-Agent", "Musync-Android/1.4.1")
             .build()
         NewPipeDownloader.instance.client.newCall(req).execute().use { resp ->
             if (resp.isSuccessful) resp.body?.string() else null
